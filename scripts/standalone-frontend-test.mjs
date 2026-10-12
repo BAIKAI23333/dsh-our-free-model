@@ -7,7 +7,6 @@ import { usageDays, usageModels } from '../packages/standalone/frontend/usage-da
 import { settingsDraft, settingsChanged, syncSettings, validateSettingsDraft } from '../packages/standalone/frontend/settings-data.mjs'
 import { verifySettingsHost } from './standalone-settings-host-test.mjs'
 import { verifyModelOperation } from './standalone-model-operation-test.mjs'
-import { verifyChannelFilters } from './standalone-channel-filter-test.mjs'
 import { spawnSync } from 'node:child_process'
 
 const web = new URL('../packages/standalone/web/', import.meta.url)
@@ -41,11 +40,7 @@ assert.ok(!html.includes('models-'), '模型页面不应在登录首屏预加载
 assert.ok(!html.includes('usage-'), '用量页面不应在登录首屏预加载')
 assert.ok(!html.includes('settings-'), '设置页面不应在登录首屏预加载')
 assert.ok(!html.includes('app.tsx'), '只提供编译后的资源')
-assert.ok(!fs.existsSync(new URL('channels.js', web)), '不同时携带第二份 React 渠道包')
 const app = fs.readFileSync(new URL('app.js', web), 'utf8')
-const channel = assets.find(name => name.startsWith('channels-'))
-assert.ok(channel, '渠道必须是独立分包')
-assert.ok(app.includes(channel) && app.includes('import('), '入口必须动态导入渠道')
 const modelsChunk = assets.find(name => name.startsWith('models-'))
 assert.ok(modelsChunk && app.includes(modelsChunk), '入口必须按需导入模型页面')
 const usageChunk = assets.find(name => name.startsWith('usage-'))
@@ -178,5 +173,4 @@ assert.deepEqual(savedSettings, {
 }, '草稿操作不能改动输入配置')
 await verifySettingsHost()
 await verifyModelOperation()
-verifyChannelFilters()
 console.log('standalone-frontend: 资源登记、四页面分包、模型筛选、统计日期分页、设置校验与草稿同步、迟到摘要及退出保存检查通过')

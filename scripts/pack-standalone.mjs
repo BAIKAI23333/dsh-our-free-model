@@ -24,18 +24,13 @@ const sourceFiles = [
   'packages/standalone/management.mjs',
   'packages/standalone/login-terminal.mjs',
   'packages/standalone/eac.mjs',
-  ...['business', 'contracts', 'credentials', 'images', 'runtime', 'worker']
-    .map(name => `packages/standalone/channels/${name}.mjs`),
-  ...['index.html', 'app.js', 'app.css', 'channels.js', 'channels.css']
+  ...['index.html', 'app.js', 'app.css']
     .map(name => `packages/standalone/web/${name}`),
   ...['adapter', 'catalog', 'channel', 'eac', 'eac-login', 'eac-user', 'effort',
     'egress', 'forward', 'http', 'kilo', 'messages', 'probe', 'recovery',
     'store', 'stream', 'trust', 'upstream', 'vault', 'vault-data', 'vault-anchor']
     .map(name => `src/${name}.js`),
   ...['completion', 'runtime', 'stats'].map(name => `src/core/${name}.js`),
-  'vendor/channel-pack/qoder-auth-wasm.wasm',
-  'vendor/channel-pack/LICENSE',
-  'vendor/channel-pack/NOTICE.md',
 ].sort()
 
 function regularBytes(file) {
@@ -125,7 +120,7 @@ exec "$ofm_package_dir/runtime/node" "$ofm_package_dir/packages/standalone/cli.m
 仅验证构建机器的 macOS 架构；未验证其它 macOS 版本、Intel Mac 或 Windows/Linux。
 本包不会设置系统代理，也不会修改其它客户端的接入配置。
 完整性记录见 package-manifest.json；该记录不是签名或发布授权。
-许可证见 LICENSE、vendor/channel-pack/、THIRD_PARTY_NOTICES.txt 和 runtime/LICENSE。
+许可证见 LICENSE、THIRD_PARTY_NOTICES.txt 和 runtime/LICENSE。
 `)
     const manifest = {
       format: 'ofm-local-package/v1', purpose: 'development-validation-only',

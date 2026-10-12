@@ -116,7 +116,7 @@ D  src/legacy/old-rtk.js
 ?? scratch/patch-2026-10-10.diff
 ?? src/token-saver/rtk/filters/gitDiff.js.orig
 ?? docs/token-saver/rtk-notes.md
-?? vendor/channel-pack/cache/rtk-wasm.wasm
+?? src/token-saver/rtk/fixtures/rtk-wasm.wasm
 ?? scripts/probes/rtk-probe-output.json
 ?? locale/token-saver/en.json
 ?? locale/token-saver/zh.json

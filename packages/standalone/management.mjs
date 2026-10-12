@@ -75,7 +75,7 @@ export function managementSettings(value) {
 }
 
 /** 管理读写要求鉴权；登录恢复仅允许同源页面触发固定本机动作。 */
-export function createManagement({ stores, runtime, channels, eac, info, onSettingsChanged, loginTerminal = openLoginTerminal }) {
+export function createManagement({ stores, runtime, eac, info, onSettingsChanged, loginTerminal = openLoginTerminal }) {
   let bootstrap = { token: crypto.randomBytes(32).toString('base64url'), until: Date.now() + BOOTSTRAP_MS }
   const sessions = new Map()
   let cookieName
@@ -132,7 +132,6 @@ export function createManagement({ stores, runtime, channels, eac, info, onSetti
     const routable = new Set(runtime.publicModelRows().map(entry => entry.id))
     return {
       ...info(),
-      channels: channels?.state(),
       eacAuth: eac?.cached(),
       settings: managementSettings(stores.settings.get()),
       catalogSyncedAt: stores.settings.get().catalogSyncedAt ?? 0,
@@ -192,28 +191,6 @@ export function createManagement({ stores, runtime, channels, eac, info, onSetti
       json(res, 200, summary())
     } else if (method === 'GET' && pathname === `${PREFIX}/stats`) {
       json(res, 200, buildStats(stores.stats.get(), runtime.catalog))
-    } else if (method === 'POST' && pathname === `${PREFIX}/channels/rpc` && channels) {
-      // 渠道备份导入包含多账号凭据，仍限制总大小，但不能套设置表单的 16KB。
-      const body = await readBody(req, 8 * 1024 * 1024)
-      if (body.method === 'gateway.getEnabled' || body.method === 'gateway.setEnabled') {
-        if (body.method === 'gateway.setEnabled') {
-          if (typeof body.payload?.enabled !== 'boolean') throw fail(400, 'enabled 必须是布尔值')
-          persist({ enabled: body.payload.enabled })
-        }
-        const base = new URL(info().baseUrl)
-        json(res, 200, { ok: true, value: {
-          enabled: stores.settings.get().enabled !== false, running: stores.settings.get().enabled !== false,
-          blockedByEnv: false, address: { host: base.hostname, port: Number(base.port) },
-          apiKey: { value: stores.settings.get().forwardKey, path: `${info().dataDir}/settings.json`, fromEnv: false },
-          models: runtime.publicModelRows(), modelsSource: 'catalog',
-        } })
-      } else {
-        const controller = new AbortController()
-        const abort = () => controller.abort()
-        res.once('close', abort)
-        try { json(res, 200, await channels.rpc(body, controller.signal)) }
-        finally { res.removeListener('close', abort) }
-      }
     } else if (eac && pathname.startsWith(`${PREFIX}/eac/`)) {
       const params = new URL(req.url, 'http://localhost').searchParams
       const route = pathname.slice(PREFIX.length)

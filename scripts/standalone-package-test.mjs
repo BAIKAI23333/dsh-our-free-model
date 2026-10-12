@@ -147,7 +147,6 @@ try {
     const paths = manifest.files.map(file => file.path)
     assert.ok(paths.every(file => !/(^|\/)(?:node_modules|\.git|\.aoci|settings\.json|channel-credentials\.json|service\.lock|\.env)(\/|$)/.test(file)))
     for (const unwanted of ['index.js', 'client.js', 'src/updater.js', 'src/reload.js', 'feed/manifest.json']) assert.ok(!paths.includes(unwanted))
-    assert.ok(paths.includes('vendor/channel-pack/qoder-auth-wasm.wasm'))
     assert.ok(paths.includes('runtime/LICENSE'))
     assert.ok(paths.includes('THIRD_PARTY_NOTICES.txt'))
   })
@@ -173,7 +172,7 @@ try {
   const key = JSON.parse(fs.readFileSync(path.join(dataDir, 'settings.json'), 'utf8')).forwardKey
   const authorization = { authorization: `Bearer ${key}` }
   await check('all page assets load locally; unauthenticated model and management access fails', async () => {
-    for (const file of ['/', '/assets/app.js', '/assets/app.css', '/assets/channels.js', '/assets/channels.css']) {
+    for (const file of ['/', '/assets/app.js', '/assets/app.css']) {
       const response = await request(service.url, file)
       assert.equal(response.status, 200, file)
       assert.ok(!(await response.text()).includes(key))
@@ -181,8 +180,6 @@ try {
     for (const endpoint of ['/v1/models', '/api/management/summary', '/api/management/key']) {
       assert.equal((await request(service.url, endpoint)).status, 401)
     }
-    const summary = await (await request(service.url, '/api/management/summary', { headers: authorization })).json()
-    assert.equal(summary.channels.state, 'ready')
   })
   await check('the extracted package completes a local model refresh and real HTTP generation', async () => {
     const refresh = await request(service.url, '/api/management/models/refresh', {
@@ -201,7 +198,7 @@ try {
   })
   let browserVerified = false
   if (process.env.OFM_PLAYWRIGHT_MODULE) {
-    await check('browser opens the extracted package and renders the account-channel page', async () => {
+    await check('browser opens the extracted package and renders the EAC page', async () => {
       const require = createRequire(import.meta.url)
       const { chromium } = require(process.env.OFM_PLAYWRIGHT_MODULE)
       browser = await chromium.launch({
@@ -212,9 +209,8 @@ try {
       page.on('pageerror', error => errors.push(error.message))
       await page.goto(service.managementUrl)
       await page.locator('#app').waitFor({ state: 'visible' })
-      await page.locator('[data-page="channels"]').click()
-      await page.locator('#page-channel').waitFor({ state: 'visible' })
-      await page.getByText('CodeArts', { exact: false }).first().waitFor()
+      await page.locator('.console-nav-item').filter({ hasText: 'EAC 协付渠道' }).click()
+      await page.getByRole('heading', { name: 'EAC 协付渠道', exact: true }).waitFor()
       await page.screenshot({ path: `${source}.smoke.png`, fullPage: true })
       assert.deepEqual(errors, [])
       await browser.close()

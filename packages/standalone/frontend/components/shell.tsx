@@ -1,4 +1,4 @@
-import { Activity, Boxes, Cable, ChevronRight, Handshake, LayoutDashboard, LogOut, Moon, Network, Settings2, ShieldCheck, Sun } from 'lucide-react'
+import { Activity, Boxes, Cable, ChevronRight, Handshake, LayoutDashboard, LogOut, Moon, Settings2, ShieldCheck, Sun } from 'lucide-react'
 import { useState } from 'react'
 import brandMark from '../../../../icon.svg?inline'
 import { Badge, Button } from './ui'
@@ -11,7 +11,6 @@ const navigation = [
     { id: 'usage', name: '用量统计', icon: Activity },
   ] },
   { label: '渠道与连接', items: [
-    { id: 'channels', name: '免费账号渠道', icon: Network },
     { id: 'eac', name: 'EAC 协付渠道', icon: Handshake },
     { id: 'connection', name: 'API 接入', icon: Cable },
   ] },
@@ -40,7 +39,7 @@ export function ThemeToggle() {
 }
 
 export const pageNames: Record<Page, string> = {
-  overview: '概览', models: '模型清单', usage: '用量统计', channels: '免费账号渠道',
+  overview: '概览', models: '模型清单', usage: '用量统计',
   eac: 'EAC 协付渠道', settings: '服务设置', connection: 'API 接入',
 }
 

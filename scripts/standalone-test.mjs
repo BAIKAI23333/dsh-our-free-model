@@ -131,7 +131,7 @@ try {
     assert.equal(response.status, 200)
     assert.equal(health.product, 'standalone')
     assert.equal(health.capabilities.eac, true)
-    assert.equal(health.capabilities.accountChannels, true)
+    assert.equal(health.capabilities.accountChannels, false)
     await listingStarted
     assert.equal(kiloCalls, 0)
   })

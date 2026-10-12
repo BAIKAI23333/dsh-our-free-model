@@ -34,7 +34,6 @@ import { DATA_DIR_NAME, decodeWindow, resolveDshHome } from './src/store.js'
 import { isEacEntry, isKiloEntry } from './src/catalog.js'
 import { STATE } from './src/probe.js'
 import { generateKey, rankLanAddresses, startForwardServer, startLanRelay } from './src/forward.js'
-import { chanGatewayCredential, chanGatewayEnabled, chanGatewayPort, startChanRelay } from './src/chan-relay.js'
 import { CODE, UpstreamError } from './src/http.js'
 import { egressActive, egressFetch, outletLabel, readOutletSelection, startEgressRelay } from './src/egress.js'
 import { directFetch } from './src/eac.js'
@@ -681,120 +680,6 @@ export function apply(ctx, config) {
     }
   }
 
-  // ── the channels' gateway relay ─────────────────────────────────────────────
-  /**
-   * The absorbed pack serves every 白嫖 provider through one OpenAI-compatible
-   * gateway on the loopback. The relay is this plugin's own door in front of
-   * it: callers authenticate with `chanGateway.relay.key` and the forwarded
-   * hop is re-stamped with the gateway's own credential, which never leaves
-   * the host. Off until asked for; the settings page owns the switch.
-   */
-  let chanRelay = null
-  let chanRelayError = ''
-  let chanRelaySyncInFlight = null
-
-  function chanRelayKey() {
-    const relay = settings.get().chanGateway?.relay ?? {}
-    if (typeof relay.key === 'string' && relay.key !== '') return relay.key
-    const minted = generateKey()
-    settings.update({ chanGateway: { ...(settings.get().chanGateway ?? {}), relay: { ...(settings.get().chanGateway?.relay ?? {}), key: minted } } })
-    settings.flush()
-    return minted
-  }
-
-  function rotateChanRelayKey() {
-    const minted = generateKey()
-    settings.update({ chanGateway: { ...(settings.get().chanGateway ?? {}), relay: { ...(settings.get().chanGateway?.relay ?? {}), key: minted } } })
-    settings.flush()
-    return minted
-  }
-
-  /** The gateway's address and credential, read fresh: both can move (env). */
-  function chanGatewayTarget() {
-    return {
-      port: chanGatewayPort(process.env),
-      enabledByEnv: chanGatewayEnabled(process.env),
-      credential: chanGatewayCredential({ profileContext: optional('profileContext'), env: process.env }),
-    }
-  }
-
-  async function syncChanRelay() {
-    while (chanRelaySyncInFlight !== null) await chanRelaySyncInFlight.catch(() => {})
-    const run = syncChanRelayOnce()
-    chanRelaySyncInFlight = run
-    try { await run } finally { if (chanRelaySyncInFlight === run) chanRelaySyncInFlight = null }
-  }
-  async function syncChanRelayOnce() {
-    const relay = settings.get().chanGateway?.relay ?? {}
-    const wanted = relay.enabled === true
-    const host = String(relay.host ?? '').trim() || '127.0.0.1'
-    const port = Number.isFinite(Number(relay.port)) && Number(relay.port) > 0 ? Math.trunc(Number(relay.port)) : 0
-    const target = chanGatewayTarget()
-    if (chanRelay !== null && wanted && chanRelay.host === host && chanRelay.port === port) return
-    if (chanRelay === null && !wanted) return
-    if (chanRelay !== null) {
-      const closing = chanRelay
-      chanRelay = null
-      await closing.close().catch(() => {})
-    }
-    if (!wanted) { chanRelayError = ''; return }
-    if (port !== 0 && target.port === port) {
-      chanRelayError = 'the relay needs a port of its own (the gateway listens on ' + target.port + ')'
-      logger.warn?.(`our-free-model: channel gateway relay not started (${chanRelayError})`)
-      return
-    }
-    try {
-      chanRelay = await startChanRelay({
-        config: () => {
-          const current = settings.get().chanGateway?.relay ?? {}
-          const targetNow = chanGatewayTarget()
-          return {
-            enabled: current.enabled === true,
-            host: String(current.host ?? '').trim() || '127.0.0.1',
-            port: current.port ?? 0,
-            lanKey: chanRelayKey(),
-            gatewayHost: '127.0.0.1',
-            gatewayPort: targetNow.port,
-            gatewayKey: targetNow.credential?.key ?? '',
-          }
-        },
-        log: message => logger.warn?.(`our-free-model channel relay: ${message}`),
-      })
-      chanRelayError = ''
-      // The bound port goes back into the settings, so the page shows the
-      // address that actually answers (the OS picks when 0 was asked for).
-      const settled = settings.get().chanGateway ?? {}
-      settings.update({ chanGateway: { ...settled, relay: { ...(settled.relay ?? {}), port: chanRelay.port } } })
-      settings.flush()
-    } catch (error) {
-      chanRelayError = String(error?.message ?? error)
-      logger.warn?.(`our-free-model: channel gateway relay could not start (${chanRelayError})`)
-    }
-  }
-
-  function chanRelayStatus() {
-    const relay = settings.get().chanGateway?.relay ?? {}
-    const target = chanGatewayTarget()
-    return {
-      relay: {
-        enabled: relay.enabled === true,
-        running: chanRelay !== null,
-        host: chanRelay?.host ?? (String(relay.host ?? '').trim() || '127.0.0.1'),
-        port: chanRelay?.port ?? relay.port ?? 0,
-        hasKey: typeof relay.key === 'string' && relay.key !== '',
-        error: chanRelayError,
-      },
-      gateway: {
-        port: target.port,
-        enabledByEnv: target.enabledByEnv,
-        keyFound: target.credential !== null,
-        keyFromEnv: target.credential?.fromEnv === true,
-        keyPath: target.credential?.path ?? '',
-      },
-    }
-  }
-
-
   // ── egress outlet ───────────────────────────────────────────────────────────
   /** One gateway round trip at a time; the panel polls, the throttle decides. */
   let latencyMeasureInFlight = null
@@ -1017,47 +902,6 @@ export function apply(ctx, config) {
    * its own structural check instead of reading as "admitted".
    */
   const fenceConnection = connectionAdmissionView(() => optional('connection'))
-  // ── the absorbed free-channel pack ──────────────────────────────────────────
-  /**
-   * The 白嫖 channels — CodeArts (华为云), CodeBuddy / WorkBuddy (腾讯), LobsterAI
-   * (有道), Qoder / Qoder CN (阿里系), TRAE (字节), Cline, Loomy (讯飞), Raccoon
-   * (商汤), MiniMax Code, ZCode (智谱) and Gemini (Google) — are
-   * carried with local integration adaptations from the plugin that shipped them, vendored under
-   * `vendor/channel-pack` (provenance in `vendor/channel-pack/NOTICE.md`). Mounting the
-   * pack keeps every login flow, account pool, credit claim, model blacklist
-   * and its local OpenAI gateway working as they were validated upstream,
-   * instead of being re-implemented here and drifting.
-   *
-   * The pack runs on a fiber of its own, after `credentials`, `commands` and
-   * `llm` exist. A composition without them — a headless TUI, the offline test
-   * harness — keeps the free lane and loses only the channels, the same trade
-   * this plugin makes for every optional service. `channelPack` is the state
-   * bit `/summary` reports so the page can say *why* the channel list is empty
-   * instead of showing nothing.
-   */
-  let channelPack = { state: 'pending', error: '' }
-  ctx.inject(['credentials', 'commands', 'llm'], scoped => {
-    let stopped = false
-    scoped.effect(() => () => { stopped = true }, 'our-free-model: channel pack')
-    // Dynamic import: the pack's own imports (the kernel's llm and credential
-    // modules) are host-provided, and a composition that lacks them must still
-    // load this plugin's free lane. `pack.js` is the bundled form of the
-    // vendored tree (see scripts/build-channel-pack.mjs) — one file, so the
-    // release manifest stays inside its file cap.
-    void import('./vendor/channel-pack/pack.js').then(pack => {
-      if (stopped) return
-      pack.apply(scoped, {
-        disableOpencode: true,
-        outlet: { active: egressActive, fetch: egressFetch },
-      })
-      channelPack = { state: 'ready', error: '' }
-      logger.info?.('our-free-model: free-channel pack mounted (CodeArts, CodeBuddy, and 11 more)')
-    }).catch(error => {
-      if (stopped) return
-      channelPack = { state: 'failed', error: String(error?.message ?? error).slice(0, 300) }
-      logger.warn?.(`our-free-model: free-channel pack unavailable (${channelPack.error})`)
-    })
-  })
 
   const logAdmissionRejection = surface => ({ status, source, reason }) => {
     // Fixed fields only: headers, request URLs and admission errors may contain
@@ -1218,36 +1062,6 @@ export function apply(ctx, config) {
       lanKey: settings.get().forwardLanKey ?? '',
       models: publicModelRows().map(row => row.id),
     }),
-    // The absorbed channel pack's liveness, for the 白嫖接入 page: the page
-    // renders its channel grid from this bit plus the pack's own RPC.
-    channels: () => channelPack,
-    chanRelay: {
-      status: chanRelayStatus,
-      apply: async patch => {
-        const current = settings.get().chanGateway ?? {}
-        const relay = { ...(current.relay ?? {}) }
-        if (patch === null || typeof patch !== 'object') throw httpError(400, 'the request body must be a JSON object')
-        if (patch.enabled !== undefined) relay.enabled = patch.enabled === true
-        if (patch.host !== undefined) {
-          const host = String(patch.host ?? '').trim()
-          if (host !== '' && host !== '127.0.0.1' && host !== 'localhost' && host !== '0.0.0.0' && host !== '::') {
-            throw httpError(400, 'host must be one of 127.0.0.1, localhost, 0.0.0.0, ::')
-          }
-          relay.host = host === 'localhost' ? '127.0.0.1' : host
-        }
-        if (patch.port !== undefined) {
-          const port = Number(patch.port)
-          if (!Number.isInteger(port) || port < 0 || port > 65535) throw httpError(400, 'port must be an integer between 0 and 65535')
-          relay.port = port
-        }
-        settings.update({ chanGateway: { ...current, relay } })
-        settings.flush()
-        await syncChanRelay()
-        return chanRelayStatus()
-      },
-      key: () => chanRelayKey(),
-      rotate: rotateChanRelayKey,
-    },
     // Whether the co-paid lane is open on this host at all — the settings page's
     // one-bit answer to "why do I see no EAC group" (issue #60). Reads the gate,
     // not the listing: a closed gate and a dead relay are different sentences.
@@ -1438,7 +1252,6 @@ export function apply(ctx, config) {
   ctx.effect(() => () => {
     void forward?.close().catch(() => {})
     void relay?.close().catch(() => {})
-    void chanRelay?.close().catch(() => {})
     void outletRelay?.close().catch(() => {})
   }, 'our-free-model: forward listener')
 
@@ -1472,8 +1285,6 @@ export function apply(ctx, config) {
       await syncForward()
       if (disposed) return
       await syncRelay()
-      if (disposed) return
-      await syncChanRelay()
       if (disposed) return
       // Every await here is a chance for teardown to have run underneath this
       // boot: a resumed refresh would force a probe round against stores it
@@ -1940,22 +1751,6 @@ function createApiRoutes(deps) {
       if (method === 'POST' && routePath === '/forward/rotate') {
         return send(200, { key: deps.rotateKey() })
       }
-      // The channels' gateway relay (the pack's loopback OpenAI endpoint,
-   // re-exposed under this plugin's own key). Status never carries a secret;
-      // the key routes are read by the same fence as every other route here.
-      if (method === 'GET' && routePath === '/chan-gateway') {
-        return send(200, deps.chanRelay.status())
-      }
-      if (method === 'POST' && routePath === '/chan-gateway/apply') {
-        const body = await readJson(req)
-        return send(200, await deps.chanRelay.apply(body))
-      }
-      if (method === 'GET' && routePath === '/chan-gateway/key') {
-        return send(200, { key: deps.chanRelay.key() })
-      }
-      if (method === 'POST' && routePath === '/chan-gateway/rotate') {
-        return send(200, { key: deps.chanRelay.rotate() })
-      }
       if (method === 'GET' && routePath === '/forward/lan/key') {
         return send(200, { key: deps.settings.get().forwardLanKey ?? '' })
       }
@@ -2335,9 +2130,6 @@ function buildSummary(deps) {
     // /eac/status on mount). `authorized: false` with the lane available is the
     // one state the model cards badge as locked.
     eacAuth: deps.eacAuth?.cached?.() ?? null,
-    // Whether the absorbed free-channel pack is live on this host, and its
-    // failure reason when it is not (see the mount in `apply`).
-    channels: deps.channels?.() ?? { state: 'unknown', error: '' },
     update: { available: update.available, latest: update.latest, current: update.current, checkedAt: update.checkedAt, applying: update.applying, managed: update.managed === true },
   }
 }

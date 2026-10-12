@@ -30,7 +30,6 @@ export function Overview({ summary, stats, host }: Snapshot & { host: Host }) {
   const failures = [...stats.samples].reverse().filter(row => row.ok === false).slice(0, 4)
   const sources = [
     { name: '匿名与 Kilo', sub: '无需账号的免费模型', icon: Zap, count: summary.catalog.filter(row => row.channel === 'anonymous' || row.channel === 'kilo').length, page: 'models' as const },
-    { name: '免费账号渠道', sub: '13 个供应商，独立账号池', icon: Network, count: summary.catalog.filter(row => !['anonymous', 'kilo', 'eac'].includes(row.channel)).length, page: 'channels' as const },
     { name: 'EAC 协付渠道', sub: summary.eacAuth?.local ? '已保存本机授权' : '尚未保存本机授权', icon: Handshake, count: summary.catalog.filter(row => row.channel === 'eac').length, page: 'eac' as const },
   ]
 
@@ -99,7 +98,7 @@ export function Overview({ summary, stats, host }: Snapshot & { host: Host }) {
       <Card className="ov-failures">
         <div className="card-heading"><div><h2>运行检查</h2><p>服务与最近的失败请求</p></div>
           <Badge tone={failures.length ? 'warning' : 'success'}>{failures.length ? '有失败记录' : '暂无失败记录'}</Badge></div>
-        <div className="runtime-check"><CircleCheck size={17} /><span>渠道模块</span><strong>{summary.channels.state === 'ready' ? '已就绪' : summary.channels.state === 'failed' ? '加载失败' : '初始化中'}</strong></div>
+        <div className="runtime-check"><CircleCheck size={17} /><span>模型来源</span><strong>{`${summary.catalog.length} 个模型`}</strong></div>
         <div className="runtime-check"><RefreshCw size={17} /><span>模型自动刷新</span><strong>{summary.automaticRefresh ? `每 ${summary.settings.probeIntervalMinutes} 分钟` : '已暂停'}</strong></div>
         {failures.length ? <div className="failure-list ov-failure-list">{failures.map((row, index) =>
           <div key={`${row.at}-${index}`} className="ov-failure-row">

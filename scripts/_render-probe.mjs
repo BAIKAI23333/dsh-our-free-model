@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = path.join(fileURLToPath(new URL('..', import.meta.url)))
 const source = fs.readFileSync(path.join(root, 'client.js'), 'utf8')
-const activeTab = process.argv[2] ?? 'gateway'
+const activeTab = process.argv[2] ?? 'free'
 
 // ── fake backend: same-origin payloads the pages read ────────────────────────
 const summary = {
@@ -24,7 +24,6 @@ const summary = {
   announcements: { unread: 0, fetchedAt: 0 },
   laneAvailable: true,
   eacAuth: { available: true, authorized: true, login: 'probe', required: true, lastCheck: Date.now() },
-  channels: { state: 'ready', error: '' },
   update: { available: false, latest: '', current: '2.0.0', checkedAt: 0, applying: false, managed: false },
 }
 const routes = {
@@ -32,7 +31,6 @@ const routes = {
   '/stats': { requests: 0, requestFailures: 0, turns: 0, failedTurns: 0, days: [], models: [], samples: [], grand: { input: 0, output: 0, reasoning: 0, calls: 0, failed: 0 } },
   '/meta': { version: '2.0.0', reloadedAt: 0, reloadCount: 0, distribution: 'self', feed: { fetchedAt: 0, source: '', error: '' }, update: { available: false } },
   '/eac/status': summary.eacAuth,
-  '/chan-gateway': { relay: { enabled: true, running: true, host: '127.0.0.1', port: 18326, hasKey: true, error: '' }, gateway: { port: 8326, enabledByEnv: true, keyFound: true, keyFromEnv: false, keyPath: 'x' } },
   '/announcement': { version: 'x', acknowledged: true },
   '/announcements': { items: [], unread: 0, fetchedAt: 0, notifyOs: false },
 }
@@ -132,45 +130,17 @@ const exports = registered.factory(name => {
 })
 
 const sections = []
-// The shell-side connection service, serving the channel-pack RPC with the same
-// shapes the real host answers (structured address/apiKey, ledger trees...).
-const rpcMethods = {
-  'gateway.getEnabled': {
-    enabled: true, running: true, blockedByEnv: false,
-    address: { host: '127.0.0.1', port: 8326 },
-    apiKey: { value: 'gw-key-abcdef', fromEnv: false, path: 'C:/x/api-key' },
-    models: [{ provider: 'buddy', id: 'deepseek-v4.1-flash', name: 'DeepSeek V4.1 Flash' }],
-    modelsSource: 'catalog',
-  },
-  'provider.status': { statuses: { codearts: { models: { total: 9, disabled: 0 }, accounts: { total: 1, enabled: 1 }, closed: false } } },
-  'account.list': { accounts: [{ id: 'codearts-1', provider: 'codearts', nickname: 'probe', enabled: true, refreshable: true, expiresAt: Date.now() + 86400000 }] },
-  'model.list': { models: [{ id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro', disabled: false, dead: false }] },
-  'usage.tokenLedger': {
-    snapshot: {
-      channels: [{ channel: 'direct', providers: [{ provider: 'codearts', accounts: [{ accountId: 'codearts-1', models: [{ model: 'deepseek-v4.1-flash', requests: 12, reportedRequests: 12, inputTokens: 1000, outputTokens: 2000, cacheReadTokens: 300, cacheWriteTokens: 0, reasoningTokens: 400, errors: 1, avgTtftMs: 320, avgTps: 41.5 }], totals: { requests: 12, reportedRequests: 12, inputTokens: 1000, outputTokens: 2000, cacheReadTokens: 300, cacheWriteTokens: 0, reasoningTokens: 400, errors: 1, avgTtftMs: 320, avgTps: 41.5 } }] }] }],
-      totals: { requests: 12, reportedRequests: 12, inputTokens: 1000, outputTokens: 2000, cacheReadTokens: 300, cacheWriteTokens: 0, reasoningTokens: 400, errors: 1, avgTtftMs: 320, avgTps: 41.5 },
-      entries: [
-        { ts: Date.now() - 60000, channel: 'direct', provider: 'codearts', model: 'deepseek-v4.1-flash', accountId: 'codearts-1', usageReported: true, inputTokens: 120, outputTokens: 300, cacheReadTokens: 40, reasoningTokens: 50, ttftMs: 310, tps: 40.2, durationMs: 4200 },
-        { ts: Date.now() - 120000, channel: 'gateway', provider: 'buddy', model: 'kimi-k3', accountId: '', usageReported: false, inputTokens: 0, outputTokens: 0, durationMs: 88, error: 'insufficient quota' },
-      ],
-    },
-  },
-  'usage.autoCheckin': { autoCheckin: { enabled: true, lastDate: '2026-10-06', ranToday: true, running: false, lastResult: 'ok', lastAt: Date.now(), channels: [{ provider: 'buddy', text: 'ok' }], dismissed: false } },
-  'usage.tokenLedgerHistory': { history: [], totals: { requests: 120, reportedRequests: 118, inputTokens: 9000, outputTokens: 21000, cacheReadTokens: 4200, cacheWriteTokens: 0, reasoningTokens: 5000, errors: 3, avgTtftMs: 300, avgTps: 44 } },
-}
+// The surviving pages read the plugin's own same-origin `/api/our-free-model/*`
+// routes (stubbed above). No surviving page speaks the connection RPC, so this
+// composition has none — a call is an honest "no endpoint" rather than a stub
+// that would let a dead consumer pass unnoticed.
 const ctx = {
   locale: { register: () => {}, bind: () => key => (typeof key === 'string' ? key : String(key)) },
   effect: fn => { try { fn() } catch { /* degrade */ } return { [Symbol.dispose]() {} } },
   get: () => undefined,
   connection: {
     rpc: {
-      call: (mount, endpoint, payload) => {
-        if (mount !== '/api' || endpoint !== 'channel-pack') return Promise.resolve({ ok: false, error: { message: 'unknown endpoint' } })
-        const value = rpcMethods[payload?.method]
-        return value === undefined
-          ? Promise.resolve({ ok: false, error: { code: 'no-handler', message: `probe has no stub for ${payload?.method}` } })
-          : Promise.resolve({ ok: true, value })
-      },
+      call: () => Promise.resolve({ ok: false, error: { code: 'no-endpoint', message: 'this probe mounts no RPC endpoint' } }),
     },
   },
   slots: {

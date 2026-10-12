@@ -2,7 +2,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import http from 'node:http'
-import { createCredentials } from '../packages/standalone/channels/credentials.mjs'
 
 const modelCount = Number(process.env.OFM_PREVIEW_MODELS ?? 0)
 const usageFixture = process.env.OFM_PREVIEW_USAGE === '1'
@@ -96,43 +95,7 @@ process.execArgv.push('--import', fixture)
 await import(fixture)
 const prefix = creditsFixture ? 'ui-credits' : settingsFixture ? 'ui-settings' : usageFixture ? usageDaysAgo ? 'ui-usage-history' : 'ui-usage' : modelCount ? 'ui-phase1-load' : 'ui-phase1'
 const dataDir = path.resolve(`.verify/${prefix}-data`)
-fs.mkdirSync(path.join(dataDir, 'channel-pack'), { recursive: true })
-const state = path.join(dataDir, 'channel-pack/state.json')
-if (!fs.existsSync(state)) {
-  fs.writeFileSync(state, JSON.stringify({ accounts: [{
-    id: 'buddy-preview', provider: 'buddy', nickname: '本机替身账号', enabled: true, refreshable: false,
-    createdAt: Date.now(), expiresAt: Date.now() + 86400000, credentialRef: 'BUDDY_ACCOUNT_PREVIEW',
-  }], disabledModels: {} }))
-  const credentials = createCredentials(dataDir)
-  await credentials.set('BUDDY_ACCOUNT_PREVIEW', JSON.stringify({
-    access_token: 'fixture-preview', refresh_token: 'fixture-refresh', domain: 'copilot.tencent.com',
-    expires_at: String(Date.now() + 86400000), refresh_expires_at: String(Date.now() + 7 * 86400000),
-    user_id: 'fixture-user', nickname: '本机替身账号', account_type: 'personal',
-  }))
-  credentials.dispose()
-}
-if (creditsFixture) {
-  const fixtureAccounts = [
-    { id: 'buddy-preview', provider: 'buddy', nickname: '余额正常的替身账号', token: 'fixture-preview' },
-    { id: 'buddy-preview-error', provider: 'buddy', nickname: '查询失败的替身账号', token: 'fixture-expired' },
-    { id: 'zcode-preview', provider: 'zcode', nickname: 'ZCode 替身账号', token: 'fixture-zcode' },
-    { id: 'gemini-preview', provider: 'gemini', nickname: 'Gemini 替身账号', token: 'fixture-gemini' },
-  ]
-  const credentials = createCredentials(dataDir)
-  for (const account of fixtureAccounts) {
-    await credentials.set(`PREVIEW_${account.id.replaceAll('-', '_').toUpperCase()}`, JSON.stringify({
-      access_token: account.token, zcode_jwt: account.token, device_mid: 'fixture-device',
-      expires_at: Date.now() + 86400000, project_id: 'fixture-project', account_label: account.nickname,
-    }))
-  }
-  credentials.dispose()
-  fs.writeFileSync(state, JSON.stringify({ accounts: fixtureAccounts.map(account => ({
-    id: account.id, provider: account.provider, nickname: account.nickname,
-    credentialRef: `PREVIEW_${account.id.replaceAll('-', '_').toUpperCase()}`,
-    enabled: true, refreshable: false, createdAt: Date.now(), expiresAt: Date.now() + 86400000,
-  })), disabledModels: {} }))
-  fs.writeFileSync(path.join(dataDir, 'channel-pack/auto-checkin.json'), JSON.stringify({ enabled: false }))
-}
+fs.mkdirSync(dataDir, { recursive: true })
 // 仅独立用量验收目录初始化模拟统计；正式 CLI 不加载这个脚本。
 const usageFile = path.join(dataDir, 'stats.json')
 if (usageFixture && !fs.existsSync(usageFile)) {

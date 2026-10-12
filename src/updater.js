@@ -439,16 +439,11 @@ export function verifyStaged(stageDir, manifest) {
  * under the harness's bundle validation on the first in-app upgrade.
  */
 const REPOSITORY_SCAFFOLDING = ['feed', 'scripts', 'docs', 'promo', 'node_modules', 'catalog', 'worker', 'vendor']
-// Actual published runtime assets must participate in backup and rollback,
-// including when an upgrade crosses the 1.x/2.x boundary. Keep vendor source
-// trees protected; package.json is overwritten during installation, so it
-// cannot be the sole authority for identifying old runtime files to clean up.
-const VENDOR_RUNTIME_FILES = [
-  'vendor/channel-pack/pack.js',
-  'vendor/channel-pack/qoder-auth-wasm.wasm',
-  'vendor/channel-pack/NOTICE.md',
-  'vendor/channel-pack/LICENSE',
-]
+// Actual published runtime assets must participate in backup and rollback.
+// `vendor/` as a whole is repository scaffolding skipped by the sweep above, so
+// any file under it that *is* part of the release must be named here; otherwise
+// it would be neither backed up nor cleaned up on an upgrade.
+const VENDOR_RUNTIME_FILES = []
 
 /**
  * Walk a directory into relative file paths, skipping release scratch files and

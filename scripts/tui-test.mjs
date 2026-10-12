@@ -84,13 +84,12 @@ check('the probe loop and the egress watch armed on plain timers', armed.sort((a
 check('and every one of them is unref’d, so the plugin cannot hold the app open',
   armed.filter(ms => !unrefed.includes(ms)), [])
 check('the dashboard half is the only thing left waiting', ctx.__captured.serverRoutes.length, 0)
-// Two nested fibers now pend, and both are the same bargain: the channel pack
-// waits for credentials/commands/llm (a composition without them loses the
-// absorbed channels and keeps the free lane), the dashboard half waits for
-// webServer. Neither is in the plugin's own `inject`, which stays `['llm']` —
-// that is the property this check exists to protect.
+// One nested fiber pends: the dashboard half waits for `webServer`, because a
+// one-shot read of it at apply time mounted no routes at all and the settings
+// page had no data source behind a running web server. It is not in the plugin's
+// own `inject`, which stays `['llm']` — that is the property this check protects.
 check('it waits for services rather than running without them',
-  ctx.__waiting.map(fiber => [...fiber.names]), [['credentials', 'commands', 'llm'], ['webServer']])
+  ctx.__waiting.map(fiber => [...fiber.names]), [['webServer']])
 
 // The web composition has the same problem in mirror image: `webServer` is not
 // provided yet while plugins load, so a one-shot read of it at apply time mounted

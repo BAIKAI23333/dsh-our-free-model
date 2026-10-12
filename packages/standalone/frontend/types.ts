@@ -1,4 +1,4 @@
-export type Page = 'overview' | 'models' | 'usage' | 'channels' | 'eac' | 'settings' | 'connection'
+export type Page = 'overview' | 'models' | 'usage' | 'eac' | 'settings' | 'connection'
 export interface Model {
   id: string
   name: string
@@ -28,7 +28,6 @@ export interface Summary {
   automaticRefresh: boolean
   catalogSyncedAt: number
   settings: ServiceSettings
-  channels: { state: string; error?: string }
   eacAuth?: { local?: boolean; authorized?: boolean; login?: string }
   catalog: Model[]
 }

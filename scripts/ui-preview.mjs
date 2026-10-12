@@ -894,11 +894,10 @@ window.__ModuleLoader__ = {
     },
   }
 
-  // ── connection.rpc: the pack's methods, answered well-formed and empty ─────
-  // This preview runs the plugin's own host half, not the absorbed channel pack,
-  // so every \`channel-pack\` method answers the shape its page expects with no
-  // rows in it — the pages then render their real empty states instead of the
-  // "no connection" callout.
+  // ── connection.rpc: the remaining methods, answered well-formed and empty ──
+  // This preview runs the plugin's own host half, so each remaining RPC method
+  // answers the shape its page expects with no rows in it — the pages then render
+  // their real empty states instead of the "no connection" callout.
   // The pack's ledger, in the tree the three console pages read
   // (channel → provider → account → models, plus a ring of individual requests
   // keyed by \`ts\`). Small, but the same shape the real pack serves.

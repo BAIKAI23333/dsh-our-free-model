@@ -6,7 +6,6 @@ import { generateKey, startForwardServer } from '../../src/forward.js'
 import { isLoopbackHost } from '../../src/trust.js'
 import { createManagement } from './management.mjs'
 import { createStandaloneEac } from './eac.mjs'
-import { createChannelRuntime } from './channels/runtime.mjs'
 
 const PRODUCT = 'our-free-model-standalone'
 const VERSION = JSON.parse(fs.readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version
@@ -33,7 +32,6 @@ export async function startStandalone({
   let runtime
   let listener
   let management
-  let channels
   let eac
   let timer
   let refreshInFlight
@@ -62,29 +60,14 @@ export async function startStandalone({
       ...stores, logger, attributionUserAgent: `${PRODUCT}/${VERSION}`,
       sealedCredential: eac.credential,
     })
-    channels = await createChannelRuntime({ dataDir, logger, stats: stores.stats })
-    const core = runtime
-    runtime = {
-      ...core,
-      get egress() { return core.egress },
-      get gatewayLatency() { return core.gatewayLatency },
-      get catalog() { return [...core.catalog, ...channels.publicModelRows().map(row => ({ ...row, contextWindow: row.context_window, maxOutput: row.max_tokens }))] },
-      state: () => ({ ...core.state(), catalog: [...core.catalog, ...channels.publicModelRows()] }),
-      publicModelRows: () => [...core.publicModelRows(), ...channels.publicModelRows()],
-      complete: (request, onChunk) => channels.handles(request.model) ? channels.complete(request, onChunk) : core.complete(request, onChunk),
-      async refreshCatalog(options) {
-        if (stopped) return
-        await Promise.all([core.refreshCatalog(options), channels.refresh().catch(error => { if (!stopped) throw error })])
-      },
-    }
     management = createManagement({
-      stores, runtime, channels, eac,
+      stores, runtime, eac,
       info: () => ({
         product: PRODUCT, version: VERSION, dataDir,
         baseUrl: `http://${host === '::1' ? '[::1]' : host}:${listener?.port ?? requestedPort}`,
         automaticRefresh: refresh,
         networkMode: process.env.OFM_TEST_UPSTREAM ? 'fixture' : 'live',
-        capabilities: { anonymous: true, kilo: true, eac: true, accountChannels: true, webUi: true },
+        capabilities: { anonymous: true, kilo: true, eac: true, accountChannels: false, webUi: true },
       }),
       onSettingsChanged: () => { if (!refreshInFlight) scheduleRefresh() },
     })
@@ -94,7 +77,7 @@ export async function startStandalone({
       modelRows: runtime.publicModelRows,
       health: () => ({
         ok: true, service: PRODUCT, product: 'standalone', version: VERSION,
-        capabilities: { anonymous: true, kilo: true, eac: true, accountChannels: true, webUi: true },
+        capabilities: { anonymous: true, kilo: true, eac: true, accountChannels: false, webUi: true },
       }),
       handleRequest: management.handleRequest,
       log: message => logger.warn?.(`our-free-model standalone: ${message}`),
@@ -120,14 +103,14 @@ export async function startStandalone({
       return refreshInFlight
     }
     // 启动可强制探测；后续周期刷新遵守核心的限流退避。
-    const ready = Promise.all([channels.ready, refresh ? refreshModels(settings.get().standaloneProbe === true) : Promise.resolve()])
+    const ready = refresh ? refreshModels(settings.get().standaloneProbe === true) : Promise.resolve()
     return {
       product: PRODUCT, version: VERSION, dataDir,
       url: `http://${host === '::1' ? '[::1]' : host}:${listener.port}`,
       managementUrl: `http://${host === '::1' ? '[::1]' : host}:${listener.port}/${management.bootstrapFragment}`,
       port: listener.port,
       keyFile: path.join(dataDir, 'settings.json'),
-      runtime, channels, ready,
+      runtime, ready,
       close() {
         if (closing !== undefined) return closing
         stopped = true
@@ -136,7 +119,7 @@ export async function startStandalone({
         eac.dispose()
         runtime.dispose()
         closing = (async () => {
-          try { await Promise.all([listener.close(), channels.close()]) } finally {
+          try { await listener.close() } finally {
             stores.dispose()
             releaseLock()
           }
@@ -151,7 +134,6 @@ export async function startStandalone({
     eac?.dispose()
     runtime?.dispose()
     if (listener) await listener.close()
-    await channels?.close()
     stores?.dispose()
     releaseLock()
     throw error
