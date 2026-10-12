@@ -25,11 +25,9 @@ export function stageDesktopService(destination) {
   }
   tree('src', file => /\.(js|json)$/.test(file))
   for (const name of ['cli', 'service', 'management', 'login-terminal', 'eac']) copy(`packages/standalone/${name}.mjs`)
-  tree('packages/standalone/channels', file => file.endsWith('.mjs'))
   tree('packages/standalone/web', file => /\.(html|js|css|json)$/.test(file))
   copy('packages/standalone/package.json')
   copy('packages/desktop/service-host.mjs')
-  for (const name of ['qoder-auth-wasm.wasm', 'LICENSE', 'NOTICE.md']) copy(`vendor/channel-pack/${name}`)
   copy('LICENSE')
   copy('scripts/standalone-third-party.txt', 'THIRD_PARTY_NOTICES.txt')
   fs.writeFileSync(path.join(destination, 'package.json'), JSON.stringify({ private: true, type: 'module' }) + '\n')

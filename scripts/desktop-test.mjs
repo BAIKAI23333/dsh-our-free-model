@@ -63,7 +63,7 @@ try {
     stageDesktopService(serviceRoot)
     fs.copyFileSync(process.execPath, path.join(scratch, process.platform === 'win32' ? 'node.exe' : 'node'))
     for (const file of ['src/providers/registry.json', 'src/core/runtime.js', 'packages/standalone/web/assets.json',
-      'packages/standalone/management.mjs', 'packages/standalone/channels/worker.mjs', 'vendor/channel-pack/qoder-auth-wasm.wasm']) {
+      'packages/standalone/management.mjs', 'packages/standalone/login-terminal.mjs', 'packages/standalone/eac.mjs']) {
       assert.ok(fs.existsSync(path.join(serviceRoot, file)), file)
     }
     assert.ok(!fs.existsSync(path.join(serviceRoot, '.aoci')))
